@@ -1,0 +1,19 @@
+{
+  "manifestVersion": 1,
+  "id": "flow-engine",
+  "name": "Flow Engine",
+  "version": "2.1.0",
+  "description": "Defined workflow orders, gates, signatures, and dispatch safeguards for Hanako.",
+  "trust": "full-access",
+  "minAppVersion": "0.242.0",
+  "activationEvents": ["onStartup"],
+  "capabilities": ["session"],
+  "contributes": {
+    "tools": [
+      "flow_list", "flow_new", "flow_start", "flow_check", "flow_sign",
+      "flow_correct", "flow_escalate", "flow_complete", "flow_archive",
+      "flow_pause", "flow_resume", "flow_close", "flow_bind", "flow_unbind", "flow_status"
+    ],
+    "extensions": ["extensions/guard.js"]
+  }
+}
