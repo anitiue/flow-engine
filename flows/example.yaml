@@ -1,0 +1,61 @@
+{
+  "flow_id": "example",
+  "version": "1.0.0",
+  "name": "Generic Delivery Flow",
+  "purpose": "Move a defined piece of work from confirmed requirements through implementation, self-check, and delivery.",
+  "report": {
+    "to": "responsible_owner",
+    "content": "Outcome, changed files or deliverables, verification, and remaining risks.",
+    "format": "Concise written handoff"
+  },
+  "correction_policy": "The active agent verifies and corrects discovered prerequisite defects, then records a correction; escalate blockers beyond its authority.",
+  "completion_criteria": "Every step is signed and the responsible owner accepts the final delivery.",
+  "retention_days": 180,
+  "steps": [
+    {
+      "id": "confirm",
+      "name": "Requirement Confirmation",
+      "agent": "responsible_owner",
+      "deliverable": "Confirmed requirements and scope",
+      "acceptance": [
+        "The objective and scope are explicit.",
+        "The ordered steps and owners are confirmed.",
+        "The delivery and reporting requirements are explicit."
+      ]
+    },
+    {
+      "id": "implement",
+      "name": "Implementation",
+      "agent": "implementer",
+      "deliverable": "Implemented work",
+      "acceptance": [
+        "The implementation matches the confirmed requirements.",
+        "The requested deliverable is present at its stated location.",
+        "No unapproved scope has been added."
+      ]
+    },
+    {
+      "id": "self_check",
+      "name": "Self Check",
+      "agent": "implementer",
+      "deliverable": "Self-check results",
+      "acceptance": [
+        "Relevant tests or checks have been run.",
+        "Failures and limitations are recorded.",
+        "The deliverable is ready for responsible-owner review."
+      ]
+    },
+    {
+      "id": "deliver",
+      "name": "Delivery",
+      "agent": "responsible_owner",
+      "deliverable": "Final delivery report",
+      "is_final": true,
+      "acceptance": [
+        "The final deliverable has been reviewed.",
+        "The outcome and verification are reported.",
+        "Remaining risks are disclosed."
+      ]
+    }
+  ]
+}
