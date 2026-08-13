@@ -1,0 +1,17 @@
+# Node
+node_modules/
+
+# Build artifacts
+dist/
+*.zip
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
