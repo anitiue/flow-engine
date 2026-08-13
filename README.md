@@ -1,77 +1,114 @@
-# Flow Engine
+# Flow Engine（流程引擎）
 
-Flow Engine is a full-access Hanako plugin for explicit, serial workflow orders. It stores flow definitions, frozen order snapshots, append-only event logs, project bindings, signatures, gate results, completion records, and archive records under `plugin-data/flow-engine/`.
+一个 Hanako 插件，让"干活"变成"按流程走"：把一件工作拆成明确的步骤，每一步写清**谁负责**、**做到什么标准算合格**，全程留痕、可追溯、不可跳过。
 
-## Installation
+核心能力：
 
-Install the `flow-engine` directory from Hanako Settings > Plugins, or copy it into the configured plugins directory. Flow Engine provides a Pi extension, so full-access plugins must be enabled. Hanako `0.242.0` or newer is required.
+- **流程定义**：创建流程（九项问卷：目的、步骤、负责人、交付物、验收标准等）
+- **订单生命周期**：建单 → 逐环节验收签名 → 完成 → 归档（180 天自动清理）
+- **门禁检查**：没到那一步，不能做那一步；不是当前环节负责人，不能签名
+- **验收签名**：每个环节的验收条目必须逐条核对，缺一不可、不可跳过
+- **挂起 / 恢复 / 关闭**：任务插队先暂停，任务作废走关闭
+- **自动保障（guard）**：绑定项目后，每轮对话自动注入流程状态；派发子任务自动附带验收标准；未建单、前置未签时拦截派发
 
-On the first `flow_list` call, the packaged `flows/example.yaml` is copied into the plugin data flow library. It is a generic example and is not tied to a project.
+## 安装
 
-## Quick Start
+1. 把 `flow-engine` 目录放入 Hanako 的插件目录（Settings → Plugins，或直接复制到插件目录）；
+2. 需要启用 Hanako 的 full-access 插件权限；要求 Hanako **0.242.0 或更新版本**；
+3. 首次调用 `flow_list` 时，包内 `flows/example.yaml`（通用示例流程）会自动导入流程库。
 
-1. Call `flow_bind` with an absolute `project_path` and a `flow_id`.
-2. Call `flow_start` with the bound `flow_id`, a safe `order_id`, a title, and the project path.
-3. Continue normal work. While a running order is bound, the guard automatically injects its status, blocks unsafe subagent dispatches, and attaches the current-step requirements to allowed dispatches.
+## 快速上手（三步）
 
-## Guidance for AI Agents
+1. **绑定项目**：`flow_bind`（参数：项目绝对路径 + 流程 ID）
+2. **开工建单**：`flow_start`（参数：流程 ID + 订单号 + 标题 + 项目路径；定义快照随即冻结）
+3. **正常干活**：绑定之后，系统自动接管——
 
-If you are an agent with access to `flow_*` tools, first call `flow_status` to learn whether the project is bound. If it is not bound, call `flow_bind`. If it is bound but has no order, call `flow_start`. Before dispatching a subagent, call `flow_check`.
+   - 每一轮对话自动注入当前流程状态（绑定、订单、当前环节、前置签名情况）；
+   - 派发子任务时，任务文本自动附带硬事实（当前环节、验收条目、交付格式）；
+   - 未建单就派发 → 被拦截并提示先 `flow_start`；
+   - 前置环节未签名就派发 → 被拦截并提示阻塞原因。
 
-## Tools
+## 给 AI agent 的使用指引
 
-- `flow_list` — parameters: none; lists installed workflow definitions and step summaries.
-- `flow_new` — parameters: `flow_id`, `version`, `name`, `questionnaire`; creates a definition after all nine questionnaire answers are supplied.
-- `flow_start` — parameters: `flow_id`, `order_id`, `title`, `project_path`; starts an order and freezes its definition snapshot.
-- `flow_check` — parameters: `order_id`, optional `agent_id`; checks the current order gate for an agent.
-- `flow_sign` — parameters: `order_id`, `declaration`, `delivery_location`, `acceptance_results`, optional `agent_id`; records a current-step signature.
-- `flow_correct` — parameters: `order_id`, `affected_step_id`, `correction`, optional `agent_id`; appends a correction record to an active order.
-- `flow_escalate` — parameters: `order_id`, `reason`, optional `agent_id`; appends a blocker escalation to an active order.
-- `flow_complete` — parameters: `order_id`, `acceptance_statement`, optional `agent_id`; marks a fully signed order as completed.
-- `flow_archive` — parameters: `order_id`, optional `agent_id`; archives a completed order with its manifest and event history.
-- `flow_pause` — parameters: `order_id`, `reason`, optional `agent_id`; pauses a running order and removes it from active dispatch safeguards.
-- `flow_resume` — parameters: `order_id`, optional `agent_id`; resumes a paused order when its project has no other running order.
-- `flow_close` — parameters: `order_id`, `reason`, optional `agent_id`; closes a running or paused order and moves it to the archive.
-- `flow_bind` — parameters: `project_path`, `flow_id`; binds a project path to a flow definition.
-- `flow_unbind` — parameters: `project_path`; removes a project-to-flow binding when it has no running order.
-- `flow_status` — parameters: `project_path`; shows a project's bound flow and bound-order status.
+如果你是一个 agent，在工具列表里看到 `flow_*` 系列工具：
 
-`flow_new` requires all nine `questionnaire` fields: `purpose`, `steps`, `agents`, `deliverables`, `acceptance`, `correction_policy`, `completion_criteria`, `report`, and `retention_days`. The `steps`, `agents`, `deliverables`, and `acceptance` arrays must have matching lengths. Every step requires an id, name, agent, deliverable, and at least one acceptance item. `report` requires `to`, `content`, and `format`.
+1. 先调 `flow_status` 查看当前项目是否已绑定流程、有无进行中的订单；
+2. 未绑定时，用 `flow_bind` 绑定（项目路径 → 流程 ID）；
+3. 已绑定未建单时，用 `flow_start` 建单（订单号用项目前缀 + 日期，如 `proj-20260812-001`）；
+4. 干活前用 `flow_check` 确认门禁（code 0 放行，非 0 查看 reason）；
+5. 环节完成后，由负责人用 `flow_sign` 逐条验收并签名落库；
+6. 全部环节签完后 `flow_complete`，随后 `flow_archive` 归档。
 
-## Gate Codes
+## 工具清单（15 个）
 
-- `0` — allowed.
-- `10` — blocked because a prerequisite step is unsigned.
-- `11` — blocked because the agent is not responsible for the current step.
-- `12` — blocked because the order is completed or archived.
-- `13` — blocked because the order is missing or damaged.
-- `14` — blocked because the current step is already signed.
+| 工具 | 作用 |
+|---|---|
+| `flow_list` | 查看流程库（流程名 + 用途 + 环节概览） |
+| `flow_new` | 创建流程（九项问卷，缺项中止） |
+| `flow_start` | 建单（冻结定义快照，一项目同时只有一张运行中订单） |
+| `flow_check` | 门禁检查（前置签名 + 环节归属校验） |
+| `flow_sign` | 验收签名（记录完成声明 + 逐条验收结果 + 交付位置） |
+| `flow_correct` | 追加修正记录 |
+| `flow_escalate` | 上报阻塞（给负责人处理） |
+| `flow_complete` | 全部环节签完后，最终验收完成 |
+| `flow_archive` | 归档（保留全部记录，180 天自动清理） |
+| `flow_pause` | 暂停（挂起当前订单，留痕原因；暂停后不阻塞新订单） |
+| `flow_resume` | 恢复（项目无其他运行中订单时） |
+| `flow_close` | 关闭作废（running / paused 均可，留痕原因，移入归档） |
+| `flow_bind` / `flow_unbind` | 绑定 / 解除（项目 → 流程） |
+| `flow_status` | 查看绑定 + 运行中订单 + 暂停订单列表 |
 
-## Pause, Resume, and Close (v2.1)
+## 门禁码（flow_check 返回值）
 
-Only one running order per project participates in guard injection and dispatch blocking. Paused orders are retained with their reason, timestamp, and actor, but do not participate in active safeguards.
+| code | 含义 |
+|---|---|
+| 0 | 通过，可执行当前环节 |
+| 10 | 前置环节尚未签名 |
+| 11 | 不是当前环节的负责人 |
+| 12 | 订单已完成或已归档 |
+| 13 | 订单缺失或数据损坏 |
+| 14 | 当前环节已签名（不可重复签名） |
 
-To temporarily prioritize another order, pause the current order with `flow_pause`, complete and archive the temporary order, then explicitly call `flow_resume` on the paused order. `flow_resume` rejects the request while another order for that project is running. Use `flow_close` to permanently close a running or paused order; a reason is required, the order is archived as `closed`, and it cannot be resumed.
+## 挂起 / 恢复 / 关闭（v2.1）
 
-The guard has three states: it injects the active order status for a running order; it emits a lightweight notice when only paused orders exist; and it prompts for order creation when no order exists. Paused orders do not trigger automatic injection or dispatch blocking.
+一个项目同时只有一张"运行中"订单（保证 guard 注入与派发拦截无歧义）。插队场景：
 
-## Data Retention
-
-Order and flow ids accept only letters, numbers, `_`, and `-`; they are never used directly as path fragments. Project paths are normalized with Node's Windows-aware `path.resolve`. Events are appended to `events.jsonl` with an ISO timestamp and agent identity. `definition.yaml` uses JSON-format YAML, a safe YAML subset that does not deserialize arbitrary tags or objects.
-
-Archived records are cleaned after 180 days using `archived_at`. Unreadable records are preserved. Order data, bindings, flow definitions, and archives are all stored below `plugin-data/flow-engine/`.
-
-## Testing
-
-The `tests/` directory contains standalone Node verification scripts. From the plugin root, run:
-
-```powershell
-Get-ChildItem -Recurse -Include *.js,*.mjs | ForEach-Object { node --check $_.FullName }
-node tests/audit_test.mjs
-node tests/repair_verify.mjs
-node tests/pause_resume_verify.mjs
-node tests/guard_mock_test.mjs
-node tests/archfix_verify.mjs
+```
+1 号订单进行中 → flow_pause（留痕：原因/时间/操作者）
+→ flow_start 开 2 号订单 → 2 号完成、归档
+→ flow_resume 恢复 1 号 → 继续
 ```
 
-`audit_test.mjs` exercises the full order lifecycle and reports 16 checks. The remaining scripts cover repaired invariants, pause/resume/close behavior, guard behavior, and archive binding repair. The guard extension should also be tested in a real Hanako session after installation, including the host's context and tool-call event fields, the context message return shape, the block return shape, and the subagent dispatch tool arguments.
+- 恢复校验：项目已有运行中订单时拒绝恢复（先暂停或归档当前订单）；
+- 作废：`flow_close`（运行中或暂停中均可）→ 留痕原因 → 移入归档（status=closed）；
+- guard 注入三态：有运行中订单 → 状态行；无运行中但有暂停订单 → 轻提示"另有 N 张暂停单"；无订单 → 提示先建单。
+
+## 数据目录
+
+运行时数据存放在 Hanako 的插件数据目录：
+
+```
+plugin-data/flow-engine/
+  flows/<flow-id>.yaml      # 流程定义库
+  orders/<order-id>/        # 订单（manifest + events.jsonl + 定义快照）
+  archive/                  # 归档（180 天自动清理）
+  bindings.json             # 绑定表（项目 → 流程）
+```
+
+所有订单事件以 JSONL 追加写入，带时间戳与操作者，不可覆盖，全程可审计。
+
+## 测试
+
+仓库内 `tests/` 提供回归测试（需 Node.js）：
+
+```bash
+node tests/audit_test.mjs             # 全生命周期（16 项）
+node tests/repair_verify.mjs          # 修复回归（6 项）
+node tests/pause_resume_verify.mjs    # 挂起/恢复/关闭（5 项）
+node tests/archfix_verify.mjs         # 归档修复（3 项）
+node tests/guard_mock_test.mjs        # guard 保障层（7 项）
+```
+
+## 开源协议
+
+MIT License
