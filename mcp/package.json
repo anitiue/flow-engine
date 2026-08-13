@@ -1,0 +1,8 @@
+{
+  "name": "flow-engine-mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "flow-engine-mcp": "server.js"
+  }
+}
